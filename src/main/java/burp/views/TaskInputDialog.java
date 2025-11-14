@@ -41,7 +41,7 @@ public class TaskInputDialog extends JDialog {
         gbc.gridy = row;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
-        inputPanel.add(new JLabel("IDP URI:"), gbc);
+        inputPanel.add(new JLabel("ACS URL:"), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;

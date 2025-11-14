@@ -12,7 +12,7 @@ including newly discovered classes described in the whitepaper “The Fragile Lo
 ## Settings
 
 - Name ID - The user to impersonate (typically an email address).
-- IDP URI - Optional: specify the Identity Provider endpoint URI if not already present in the AuthnRequest.
+- ACS URL - Optional: specify the Assertion Consumer Service URL if not already present in the AuthnRequest.
 - Timeout - Delay between requests, in milliseconds.
 - Self-Sign - When checked, the extension attempts to self-sign the SAML Response and Assertion for additional testing scenarios.
 
