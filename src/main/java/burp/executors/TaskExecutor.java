@@ -32,22 +32,28 @@ public class TaskExecutor implements ActionListener, HotKeyHandler {
         TaskInputDialog dialog = new TaskInputDialog(
                 parentFrame,
                 context.isSign(),
+                context.isRefresh(),
                 context.getTimeout()
         );
         dialog.setVisible(true);
 
         if (dialog.isConfirmed()) {
             String nameId = dialog.getNameId();
-            String destination = dialog.getDestination();
+            String assertionURL = dialog.getAssertionURL();
+            String metadataURL = dialog.getMetadataURL();
 
             if (!nameId.isEmpty()) {
                 context.setNameId(nameId);
             }
-            if (!destination.isEmpty()) {
-                context.setDestination(destination);
+            if (!assertionURL.isEmpty()) {
+                context.setAssertionConsumerServiceURL(assertionURL);
+            }
+            if (!metadataURL.isEmpty()) {
+                context.setMetadataURL(metadataURL);
             }
             context.setTimeout(dialog.getTimeout());
             context.setSign(dialog.isSign());
+            context.setRefresh(dialog.isRefresh());
 
             TaskType actionCommand = TaskType.fromString(e.getActionCommand());
             switch (actionCommand) {

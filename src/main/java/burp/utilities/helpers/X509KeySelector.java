@@ -145,13 +145,13 @@ public class X509KeySelector extends KeySelector {
     }
 
     /**
-         * Simple KeySelectorResult implementation
-         */
-        private record SimpleKeySelector(Key key) implements KeySelectorResult {
+     * Simple KeySelectorResult implementation
+     */
+    private record SimpleKeySelector(Key key) implements KeySelectorResult {
 
         @Override
-            public Key getKey() {
-                return key;
-            }
+        public Key getKey() {
+            return key;
         }
+    }
 }

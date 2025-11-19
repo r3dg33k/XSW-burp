@@ -5,14 +5,17 @@ import java.awt.*;
 
 public class TaskInputDialog extends JDialog {
     private final JTextField nameIdField = new JTextField(20);
-    private final JTextField destinationField = new JTextField(20);
+    private final JTextField assertionURLField = new JTextField(20);
+    private final JTextField metadataURLField = new JTextField(20);
     private final JTextField timeoutField = new JTextField(20);
     private final JCheckBox signCheckBox = new JCheckBox();
+    private final JCheckBox refreshCheckBox = new JCheckBox();
     private boolean confirmed = false;
 
-    public TaskInputDialog(Frame parent, boolean defaultSign, int defaultTimeout) {
+    public TaskInputDialog(Frame parent, boolean defaultSign, boolean defaultRefresh, int defaultTimeout) {
         super(parent, "Task Input", true);
         signCheckBox.setSelected(defaultSign);
+        refreshCheckBox.setSelected(defaultRefresh);
         timeoutField.setText(String.valueOf(defaultTimeout));
         initComponents();
     }
@@ -41,12 +44,24 @@ public class TaskInputDialog extends JDialog {
         gbc.gridy = row;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
-        inputPanel.add(new JLabel("ACS URL:"), gbc);
+        inputPanel.add(new JLabel("Assertion URL (target):"), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
-        inputPanel.add(destinationField, gbc);
+        inputPanel.add(assertionURLField, gbc);
+
+        row++;
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        inputPanel.add(new JLabel("Metadata URL (signed XML source):"), gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        inputPanel.add(metadataURLField, gbc);
 
         row++;
         gbc.gridx = 0;
@@ -67,6 +82,14 @@ public class TaskInputDialog extends JDialog {
 
         gbc.gridx = 1;
         inputPanel.add(signCheckBox, gbc);
+
+        row++;
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        inputPanel.add(new JLabel("Always Refresh Metadata:"), gbc);
+
+        gbc.gridx = 1;
+        inputPanel.add(refreshCheckBox, gbc);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton okButton = new JButton("OK");
@@ -102,8 +125,12 @@ public class TaskInputDialog extends JDialog {
         return nameIdField.getText().trim();
     }
 
-    public String getDestination() {
-        return destinationField.getText().trim();
+    public String getAssertionURL() {
+        return assertionURLField.getText().trim();
+    }
+
+    public String getMetadataURL() {
+        return metadataURLField.getText().trim();
     }
 
     public int getTimeout() {
@@ -116,6 +143,10 @@ public class TaskInputDialog extends JDialog {
 
     public boolean isSign() {
         return signCheckBox.isSelected();
+    }
+
+    public boolean isRefresh() {
+        return refreshCheckBox.isSelected();
     }
 
 }

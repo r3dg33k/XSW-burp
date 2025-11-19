@@ -1,11 +1,8 @@
 package burp.utilities.helpers;
 
 import burp.models.SAMLAuthnRequestDocument;
-import burp.utilities.exceptions.SAMLException;
-import burp.wrappers.*;
 import org.w3c.dom.Document;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -64,20 +61,6 @@ public class WrapHelpers {
             return null;
         }
         return null;
-    }
-
-    public static List<ByteBuffer> wrap(Document destination, Document source) {
-        List<ByteBuffer> wraps = new ArrayList<>();
-        try {
-            wraps.add(ByteBuffer.wrap(RubySAMLVoidWrapper.apply(destination).getBytes(StandardCharsets.UTF_8)));
-            wraps.add(ByteBuffer.wrap(RubyNokogiriATTLIST.apply(destination, source).getBytes(StandardCharsets.UTF_8)));
-            wraps.add(ByteBuffer.wrap(RubyNokogiriAttributePollution.apply(destination, source).getBytes(StandardCharsets.UTF_8)));
-            wraps.add(ByteBuffer.wrap(RubyNokogiriAttributePollutionExtension.apply(destination, source).getBytes(StandardCharsets.UTF_8)));
-
-
-        } catch (IOException | SAMLException ignored) {
-        }
-        return wraps;
     }
 
     public static byte[] encode(EncodingType encodingType, byte[] code) {

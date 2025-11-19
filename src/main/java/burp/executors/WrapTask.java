@@ -2,6 +2,7 @@ package burp.executors;
 
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.Annotations;
+import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.StatusCodeClass;
 import burp.api.montoya.http.message.params.HttpParameter;
@@ -11,11 +12,16 @@ import burp.api.montoya.http.message.requests.MalformedRequestException;
 import burp.models.*;
 import burp.utilities.exceptions.SAMLException;
 import burp.utilities.helpers.*;
+import burp.wrappers.RubyNokogiriATTLIST;
+import burp.wrappers.RubyNokogiriAttributePollution;
+import burp.wrappers.RubyNokogiriAttributePollutionExtension;
+import burp.wrappers.RubySAMLVoidWrapper;
 import org.apache.xml.security.signature.XMLSignature;
 import org.w3c.dom.Document;
 
 import javax.xml.crypto.dsig.DigestMethod;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
@@ -34,12 +40,28 @@ public class WrapTask implements Runnable {
     private final MontoyaApi montoyaApi;
     private final List<HttpRequestResponse> requestResponses;
     private final TaskManager manager;
+    private Document cachedMetadata;
 
     public WrapTask(TaskManager manager, List<HttpRequestResponse> requestResponses) {
         this.manager = manager;
         this.context = manager.getContext();
         this.montoyaApi = manager.getMontoyaApi();
         this.requestResponses = requestResponses;
+    }
+
+    public static String toStringWithoutBom(byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
+
+        byte[] bom = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+
+        if (bytes.length >= bom.length &&
+                bytes[0] == bom[0] && bytes[1] == bom[1] && bytes[2] == bom[2]) {
+            return new String(bytes, bom.length, bytes.length - bom.length, StandardCharsets.UTF_8);
+        }
+
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     @Override
@@ -55,6 +77,45 @@ public class WrapTask implements Runnable {
         } catch (Exception e) {
             montoyaApi.logging().logToError("Error processing SAML: " + e.getMessage());
             throw new RuntimeException(e);
+        }
+    }
+
+    private Document refreshMetadata(String uri) {
+        if (cachedMetadata != null && !context.isRefresh()) {
+            return cachedMetadata;
+        }
+
+        HttpRequestResponse metadataRequest = montoyaApi
+                .http()
+                .sendRequest(HttpRequest.httpRequestFromUrl(uri));
+
+        if (metadataRequest.hasResponse()) {
+            ByteArray body = metadataRequest.response().body();
+            try {
+                String str = toStringWithoutBom(body.getBytes());
+                Document xmlDoc = xmlHelpers.getXMLDocumentOfSAMLMessage(str);
+                SAMLMetadataDocument metadataDocument = new SAMLMetadataDocument(xmlDoc);
+                cachedMetadata = metadataDocument.getDocument();
+            } catch (SAMLException e) {
+                montoyaApi.logging().logToError("Failed to refresh metadata: " + e.getLocalizedMessage());
+            }
+        }
+
+        return cachedMetadata;
+    }
+
+    private void applyWrapper(List<ByteBuffer> wraps, Document doc, String metadataURI,
+                              WrapperFunction wrapper, String wrapperName) {
+        try {
+            Document metadata = refreshMetadata(metadataURI);
+            if (metadata == null) {
+                montoyaApi.logging().logToError("Failed to fetch metadata for " + wrapperName);
+                return;
+            }
+            String result = wrapper.apply(doc, metadata);
+            wraps.add(ByteBuffer.wrap(result.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            montoyaApi.logging().logToError("Error applying " + wrapperName + ": " + e.getMessage());
         }
     }
 
@@ -122,9 +183,14 @@ public class WrapTask implements Runnable {
 
             String authnRequestDestination = authnRequest.getDestination();
             if (authnRequestDestination != null) destination = authnRequestDestination;
-            String metadata = null;
-            if (destination != null)
-                metadata = manager.extractSAMLMetadata(destination);
+            String metadataURI = null;
+
+            if (context.getMetadataURL() != null && !context.getMetadataURL().isBlank())
+                metadataURI = context.getMetadataURL();
+            else if (destination != null) {
+                montoyaApi.logging().logToOutput("SAMLRequest Authn Destination " + destination);
+                metadataURI = manager.extractSAMLMetadata(destination);
+            }
 
             List<ByteBuffer> wraps = new ArrayList<>();
 
@@ -153,13 +219,14 @@ public class WrapTask implements Runnable {
             } catch (Exception ignored) {
             }
 
-            if (context.getMetadata() != null && !context.getMetadata().isBlank())
-                metadata = context.getMetadata();
-
-            if (metadata != null && !metadata.isBlank()) {
+            if (metadataURI != null && !metadataURI.isBlank()) {
                 try {
+                    Document metadata = refreshMetadata(metadataURI);
+                    if (metadata == null) {
+                        throw new SAMLException("Failed to fetch metadata for " + metadataURI);
+                    }
                     SAMLMetadataDocument metadataDocument = new SAMLMetadataDocument(
-                            xmlHelpers.getXMLDocumentOfSAMLMessage(metadata)
+                            metadata
                     );
                     SAMLResponseBuilder builder = new SAMLResponseBuilder(authnRequest);
 
@@ -181,8 +248,8 @@ public class WrapTask implements Runnable {
                             .withNameId(nameId)
                             .withDefaultAttributes();
 
-                    if (context.getDestination() != null && !context.getDestination().isBlank()) {
-                        builder = builder.withDestination(context.getDestination());
+                    if (context.getAssertionConsumerServiceURL() != null && !context.getAssertionConsumerServiceURL().isBlank()) {
+                        builder = builder.withDestination(context.getAssertionConsumerServiceURL());
                     }
 
                     if (context.isSign()) {
@@ -231,7 +298,11 @@ public class WrapTask implements Runnable {
                         Document doc = builder
                                 .withSignature(metadataDocument.getSignature())
                                 .build();
-                        wraps.addAll(WrapHelpers.wrap(doc, metadataDocument.getDocument()));
+
+                        applyWrapper(wraps, doc, metadataURI, RubySAMLVoidWrapper::apply, "Void Wrapper");
+                        applyWrapper(wraps, doc, metadataURI, RubyNokogiriATTLIST::apply, "Nokogiri ATTLIST");
+                        applyWrapper(wraps, doc, metadataURI, RubyNokogiriAttributePollution::apply, "Nokogiri Attribute Pollution");
+                        applyWrapper(wraps, doc, metadataURI, RubyNokogiriAttributePollutionExtension::apply, "Nokogiri Attribute Pollution Extension");
                     }
                 } catch (Exception exception) {
                     montoyaApi.logging().logToError(exception.getLocalizedMessage());
@@ -239,7 +310,7 @@ public class WrapTask implements Runnable {
             }
 
             String url = authnRequest.getAssertionConsumerServiceURL();
-            if (url == null) url = context.getDestination();
+            if (url == null) url = context.getAssertionConsumerServiceURL();
             if (url == null || url.isBlank()) throw new SAMLException("Couldn't find the Destination URL");
             HttpRequest postRequest = HttpRequest.httpRequestFromUrl(url);
             postRequest.url();
@@ -247,10 +318,10 @@ public class WrapTask implements Runnable {
                     .withMethod("POST");
             HttpRequestResponse failResponse = montoyaApi.http().sendRequest(finalRequest.withAddedParameters(
                     HttpParameter.bodyParameter("SAMLResponse", EncodingHelpers.encodeSamlParam(
-                            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response/>".getBytes(StandardCharsets.UTF_8),
-                            false,
-                            true,
-                            true
+                                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response/>".getBytes(StandardCharsets.UTF_8),
+                                    false,
+                                    true,
+                                    true
                             )
                     )
             ));
@@ -299,5 +370,10 @@ public class WrapTask implements Runnable {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @FunctionalInterface
+    private interface WrapperFunction {
+        String apply(Document doc, Document metadata) throws IOException, SAMLException;
     }
 }

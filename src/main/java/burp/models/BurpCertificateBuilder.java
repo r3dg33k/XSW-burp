@@ -24,10 +24,12 @@ import java.util.regex.Pattern;
 
 @SuppressWarnings("deprecation")
 public class BurpCertificateBuilder {
+    private final List<GeneralName> issuerAlternativeName;
+    private final List<GeneralName> subjectAlternativeName;
+    private final List<BurpCertificateExtension> burpCertificateExtensions;
     X509V3CertificateGenerator certificateGenerator;
     BurpCertificate burpCertificate;
     X509Certificate issuerCertificate;
-
     private int version;
     private BigInteger serial;
     private X500Principal issuer;
@@ -35,9 +37,6 @@ public class BurpCertificateBuilder {
     private Date notAfter;
     private X500Principal subject;
     private String signatureAlgorithm;
-
-    private final List<GeneralName> issuerAlternativeName;
-    private final List<GeneralName> subjectAlternativeName;
     private Set<Integer> keyUsage;
     private Set<KeyPurposeId> extendedKeyUsage;
     private boolean hasBasicConstraints;
@@ -47,9 +46,6 @@ public class BurpCertificateBuilder {
     private boolean setSubjectKeyIdentifier;
     private String authorityKeyIdentifier;
     private String subjectKeyIdentifier;
-
-    private final List<BurpCertificateExtension> burpCertificateExtensions;
-
     private int keySize;
     private PrivateKey privateKey;
     private PublicKey publicKey;
@@ -225,8 +221,8 @@ public class BurpCertificateBuilder {
 
         for (BurpCertificateExtension e : burpCertificateExtensions) {
             // http://bouncycastle.sourcearchive.com/documentation/1.43/classorg_1_1bouncycastle_1_1x509_1_1X509V3CertificateGenerator_fd5118a4eaa4870e5fbf6efc02f10c00.html#fd5118a4eaa4870e5fbf6efc02f10c00
-            ASN1Encodable extension = X509ExtensionUtil.fromExtensionValue(e.getExtensionValue()); // Finally!!!
-            certificateGenerator.addExtension(e.getOid(), e.isCritical(), extension);
+            ASN1Encodable extension = X509ExtensionUtil.fromExtensionValue(e.extensionValue()); // Finally!!!
+            certificateGenerator.addExtension(e.oid(), e.isCritical(), extension);
         }
 
         return certificateGenerator.generate(privateKey);

@@ -4,14 +4,12 @@ import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.utilities.exceptions.SAMLException;
-import burp.utilities.helpers.EphemeralMetadataStore;
 import burp.utilities.helpers.Utilities;
 import burp.utilities.helpers.WrapHelpers;
 import burp.utilities.helpers.XMLHelpers;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -21,20 +19,18 @@ public class TaskManager {
     private static final long SHUTDOWN_TIMEOUT_MILLISECONDS = 100;
     private final ConcurrentHashMap<Long, Runnable> activeTaskRegistry;
     private final AtomicLong taskIdGenerator;
-    private final ConcurrentHashMap<String, Object> metadataLocks;
+    private final ConcurrentHashMap<String, String> metadatas;
     private final TaskContext context;
-    private final EphemeralMetadataStore storage;
     private final MontoyaApi montoyaApi;
     private final ThreadPoolExecutor taskEngine;
 
-    public TaskManager(MontoyaApi montoyaApi, ThreadPoolExecutor taskEngine, EphemeralMetadataStore storage, TaskContext context) {
+    public TaskManager(MontoyaApi montoyaApi, ThreadPoolExecutor taskEngine, TaskContext context) {
         this.montoyaApi = montoyaApi;
         this.taskEngine = taskEngine;
-        this.storage = storage;
         this.context = context;
         this.activeTaskRegistry = new ConcurrentHashMap<>();
         this.taskIdGenerator = new AtomicLong(0);
-        this.metadataLocks = new ConcurrentHashMap<>();
+        this.metadatas = new ConcurrentHashMap<>();
     }
 
     public void execute(Runnable command) {
@@ -77,7 +73,6 @@ public class TaskManager {
             taskEngine.shutdownNow();
             Thread.currentThread().interrupt();
         } finally {
-            storage.close();
             activeTaskRegistry.clear();
             montoyaApi.logging().logToOutput(Utilities.getResourceString("unloaded"));
         }
@@ -95,66 +90,52 @@ public class TaskManager {
         return activeTaskRegistry.size();
     }
 
-    public EphemeralMetadataStore getStorage() {
-        return this.storage;
-    }
-
     public TaskContext getContext() {
         return context;
     }
 
     public String extractSAMLMetadata(String destination) {
-        if (storage.get(destination).isPresent()) {
-            return storage.get(destination).get();
-        }
+        if (metadatas.contains(destination))
+            return metadatas.get(destination);
 
-        Object lock = getMetadataLockForDestination(destination);
-        synchronized (lock) {
-            if (storage.get(destination).isPresent()) {
-                return storage.get(destination).get();
-            }
-            XMLHelpers xmlHelpers = XMLHelpers.getInstance();
-            String metadata = null;
-            String url = WrapHelpers.getMetadataURL(destination);
-            if (url != null) {
-                HttpRequestResponse metadataRequest = montoyaApi
-                        .http()
-                        .sendRequest(HttpRequest.httpRequestFromUrl(url));
-                if (metadataRequest.hasResponse()) {
-                    String body = metadataRequest.response().bodyToString();
-                    try {
-                        xmlHelpers.getXMLDocumentOfSAMLMessage(body);
-                        metadata = body;
-                    } catch (SAMLException ignored) {
-                    }
+        XMLHelpers xmlHelpers = XMLHelpers.getInstance();
+        String metadataURI = null;
+        String url = WrapHelpers.getMetadataURL(destination);
+        if (url != null && !url.isEmpty()) {
+            HttpRequestResponse metadataRequest = montoyaApi
+                    .http()
+                    .sendRequest(HttpRequest.httpRequestFromUrl(url));
+            if (metadataRequest.hasResponse()) {
+                String body = metadataRequest.response().bodyToString();
+                try {
+                    xmlHelpers.getXMLDocumentOfSAMLMessage(body);
+                    metadataURI = url;
+                } catch (SAMLException ignored) {
                 }
             }
-            if (metadata == null) {
-                try {
-                    new URI(destination);
-                    for (String location : WrapHelpers.DEFAULT_METADATA) {
-                        HttpRequestResponse metadataRequest = montoyaApi
-                                .http()
-                                .sendRequest(HttpRequest.httpRequestFromUrl(destination).withPath(location));
-                        if (metadataRequest.hasResponse()) {
-                            String body = metadataRequest.response().bodyToString();
-                            try {
-                                xmlHelpers.getXMLDocumentOfSAMLMessage(body);
-                                metadata = body;
-                                break;
-                            } catch (SAMLException ignored) {
-                            }
+        }
+        if (metadataURI == null) {
+            try {
+                URI destUri = new URI(destination);
+                for (String location : WrapHelpers.DEFAULT_METADATA) {
+                    HttpRequestResponse metadataRequest = montoyaApi
+                            .http()
+                            .sendRequest(HttpRequest.httpRequestFromUrl(destination).withPath(location));
+                    if (metadataRequest.hasResponse()) {
+                        String body = metadataRequest.response().bodyToString();
+                        try {
+                            xmlHelpers.getXMLDocumentOfSAMLMessage(body);
+                            metadataURI = destUri.resolve(location).toString();
+                            break;
+                        } catch (SAMLException ignored) {
                         }
                     }
-                } catch (URISyntaxException ignored) {
                 }
+            } catch (URISyntaxException ignored) {
             }
-            storage.put(destination, Objects.requireNonNullElse(metadata, ""));
-            return metadata;
         }
-    }
-
-    public Object getMetadataLockForDestination(String destination) {
-        return metadataLocks.computeIfAbsent(destination, k -> new Object());
+        if (metadataURI == null || metadataURI.isEmpty()) return null;
+        metadatas.put(destination, metadataURI);
+        return metadataURI;
     }
 }
