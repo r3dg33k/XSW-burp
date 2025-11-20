@@ -11,10 +11,12 @@ including newly discovered classes described in the whitepaper “The Fragile Lo
 
 ## Settings
 
-- Name ID - The user to impersonate (typically an email address).
-- ACS URL - Optional: specify the Assertion Consumer Service URL if not already present in the AuthnRequest.
-- Timeout - Delay between requests, in milliseconds.
-- Self-Sign - When checked, the extension attempts to self-sign the SAML Response and Assertion for additional testing scenarios.
+-	Name ID - The user identity to impersonate (typically an email address).
+-	Assertion URL - *Optional.* The Assertion Consumer Service (ACS) URL to target, if it is not already included in the AuthnRequest.
+-	Metadata URL - *Optional.* URL to the signed metadata document (usually the IdP’s signed metadata).
+-	Timeout - *Optional.* Delay between requests, in milliseconds.
+-	Self-Sign - *Optional.* When enabled, the extension attempts to self-sign the SAML Response and Assertion to support advanced testing scenarios.
+-	Always Refresh Metadata - *Optional.* When enabled, the extension fetches a fresh signed metadata document for every test case.
 
 ## Attacks
 
@@ -25,5 +27,7 @@ The extension probes multiple classes of Signature Wrapping vulnerabilities, inc
 
 ## Reference
 
-This extension is based on techniques introduced in the research paper:
+
+This extension is inspired by [SAMLRaider](https://github.com/CompassSecurity/SAMLRaider) extension and 
+based on techniques introduced in the research paper:
 “The Fragile Lock: Novel Bypasses for SAML Authentication”  by Zakhar Fedotkin
