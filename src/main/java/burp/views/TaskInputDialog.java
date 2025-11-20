@@ -1,5 +1,7 @@
 package burp.views;
 
+import burp.utilities.helpers.Utilities;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -13,7 +15,7 @@ public class TaskInputDialog extends JDialog {
     private boolean confirmed = false;
 
     public TaskInputDialog(Frame parent, boolean defaultSign, boolean defaultRefresh, int defaultTimeout) {
-        super(parent, "Task Input", true);
+        super(parent, Utilities.getResourceString("dialog_menu_title"), true);
         signCheckBox.setSelected(defaultSign);
         refreshCheckBox.setSelected(defaultRefresh);
         timeoutField.setText(String.valueOf(defaultTimeout));
@@ -32,7 +34,7 @@ public class TaskInputDialog extends JDialog {
 
         gbc.gridx = 0;
         gbc.gridy = row;
-        inputPanel.add(new JLabel("Name ID:"), gbc);
+        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_name_id")), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -44,7 +46,7 @@ public class TaskInputDialog extends JDialog {
         gbc.gridy = row;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
-        inputPanel.add(new JLabel("Assertion URL (target):"), gbc);
+        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_acs_url")), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -56,7 +58,7 @@ public class TaskInputDialog extends JDialog {
         gbc.gridy = row;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
-        inputPanel.add(new JLabel("Metadata URL (signed XML source):"), gbc);
+        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_metadata_url")), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -68,7 +70,7 @@ public class TaskInputDialog extends JDialog {
         gbc.gridy = row;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
-        inputPanel.add(new JLabel("Timeout:"), gbc);
+        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_timeout")), gbc);
 
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -78,7 +80,7 @@ public class TaskInputDialog extends JDialog {
         row++;
         gbc.gridx = 0;
         gbc.gridy = row;
-        inputPanel.add(new JLabel("Self-Sign:"), gbc);
+        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_self_sign")), gbc);
 
         gbc.gridx = 1;
         inputPanel.add(signCheckBox, gbc);
@@ -86,14 +88,14 @@ public class TaskInputDialog extends JDialog {
         row++;
         gbc.gridx = 0;
         gbc.gridy = row;
-        inputPanel.add(new JLabel("Always Refresh Metadata:"), gbc);
+        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_refresh")), gbc);
 
         gbc.gridx = 1;
         inputPanel.add(refreshCheckBox, gbc);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okButton = new JButton("OK");
-        JButton cancelButton = new JButton("Cancel");
+        JButton okButton = new JButton(Utilities.getResourceString("dialog_menu_ok_button"));
+        JButton cancelButton = new JButton(Utilities.getResourceString("dialog_menu_cancel_button"));
 
         okButton.addActionListener(e -> {
             confirmed = true;

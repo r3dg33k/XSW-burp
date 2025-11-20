@@ -26,10 +26,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 import static burp.utilities.helpers.Constants.HTTP_POST_BINDING;
 
@@ -84,21 +81,25 @@ public class WrapTask implements Runnable {
         if (cachedMetadata != null && !context.isRefresh()) {
             return cachedMetadata;
         }
+        try {
+            Thread.sleep(context.getTimeout());
+            HttpRequestResponse metadataRequest = montoyaApi
+                    .http()
+                    .sendRequest(HttpRequest.httpRequestFromUrl(uri));
 
-        HttpRequestResponse metadataRequest = montoyaApi
-                .http()
-                .sendRequest(HttpRequest.httpRequestFromUrl(uri));
-
-        if (metadataRequest.hasResponse()) {
-            ByteArray body = metadataRequest.response().body();
-            try {
-                String str = toStringWithoutBom(body.getBytes());
-                Document xmlDoc = xmlHelpers.getXMLDocumentOfSAMLMessage(str);
-                SAMLMetadataDocument metadataDocument = new SAMLMetadataDocument(xmlDoc);
-                cachedMetadata = metadataDocument.getDocument();
-            } catch (SAMLException e) {
-                montoyaApi.logging().logToError("Failed to refresh metadata: " + e.getLocalizedMessage());
+            if (metadataRequest.hasResponse()) {
+                ByteArray body = metadataRequest.response().body();
+                try {
+                    String str = toStringWithoutBom(body.getBytes());
+                    Document xmlDoc = xmlHelpers.getXMLDocumentOfSAMLMessage(str);
+                    SAMLMetadataDocument metadataDocument = new SAMLMetadataDocument(xmlDoc);
+                    cachedMetadata = metadataDocument.getDocument();
+                } catch (SAMLException e) {
+                    montoyaApi.logging().logToError("Failed to refresh metadata: " + e.getLocalizedMessage());
+                }
             }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
 
         return cachedMetadata;
@@ -124,6 +125,7 @@ public class WrapTask implements Runnable {
         HttpRequestResponse baselineRequestResponse = montoyaApi.http().sendRequest(requestResponse.request());
 
         if (baselineRequestResponse.response() == null) {
+            montoyaApi.logging().logToOutput("Target server returned no response! Check network connectivity and retry.");
             return;
         }
 
@@ -166,7 +168,7 @@ public class WrapTask implements Runnable {
         }
 
         if (requestString == null) {
-            montoyaApi.logging().logToOutput("SAMLRequest wasn't found not in Response");
+            montoyaApi.logging().logToOutput("SAMLRequest not present in response. Process aborted.");
             return;
         }
 
@@ -177,8 +179,8 @@ public class WrapTask implements Runnable {
 
             if (authnRequest.getProtocolBinding() != null &&
                     !HTTP_POST_BINDING.equalsIgnoreCase(authnRequest.getProtocolBinding())) {
-                montoyaApi.logging().logToError("WARNING! AuthnRequest requires different Protocol Binding!");
-                montoyaApi.logging().logToError(authnRequest.getProtocolBinding());
+                montoyaApi.logging().logToOutput("WARNING: The AuthnRequest specifies a different Protocol Binding. Results may be unreliable.");
+                montoyaApi.logging().logToOutput("Request Protocol Binding: " + authnRequest.getProtocolBinding());
             }
 
             String authnRequestDestination = authnRequest.getDestination();
@@ -188,7 +190,6 @@ public class WrapTask implements Runnable {
             if (context.getMetadataURL() != null && !context.getMetadataURL().isBlank())
                 metadataURI = context.getMetadataURL();
             else if (destination != null) {
-                montoyaApi.logging().logToOutput("SAMLRequest Authn Destination " + destination);
                 metadataURI = manager.extractSAMLMetadata(destination);
             }
 
@@ -252,7 +253,7 @@ public class WrapTask implements Runnable {
                         builder = builder.withDestination(context.getAssertionConsumerServiceURL());
                     }
 
-                    if (context.isSign()) {
+                    if (context.isSign() && clonedCertificate != null) {
                         try {
                             Document signedMessageDoc = builder.build();
                             Document signedAssertionDoc = builder.build();
@@ -309,9 +310,12 @@ public class WrapTask implements Runnable {
                 }
             }
 
-            String url = authnRequest.getAssertionConsumerServiceURL();
-            if (url == null) url = context.getAssertionConsumerServiceURL();
-            if (url == null || url.isBlank()) throw new SAMLException("Couldn't find the Destination URL");
+            String url = Optional.ofNullable(authnRequest.getAssertionConsumerServiceURL())
+                    .orElseGet(context::getAssertionConsumerServiceURL);
+            if (url == null || url.isBlank()) {
+                throw new SAMLException("Couldn't find the Destination URL");
+            }
+
             HttpRequest postRequest = HttpRequest.httpRequestFromUrl(url);
             postRequest.url();
             HttpRequest finalRequest = postRequest
@@ -347,18 +351,16 @@ public class WrapTask implements Runnable {
 
                 if (probResponse.hasResponse()) {
                     if (!responseGroup.matches(probResponse.response())) {
+                        String notes = responseGroup.describeDiff(probResponse.response());
+                        if(probResponse.response().toString().contains(canary)) {
+                            notes += String.format(
+                                    "\nCanary %s string was found in response.", canary);
+                        }
                         montoyaApi.organizer().sendToOrganizer(
                                 probResponse.withAnnotations(
                                         Annotations.annotations().withNotes(
-                                                responseGroup.describeDiff(probResponse.response())
+                                                notes
                                         )
-                                )
-                        );
-                    } else if (probResponse.response().toString().contains(canary)) {
-                        montoyaApi.organizer().sendToOrganizer(
-                                probResponse.withAnnotations(
-                                        Annotations.annotations().withNotes(String.format(
-                                                "Canary %s string was found in response.", canary))
                                 )
                         );
                     }
