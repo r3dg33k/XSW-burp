@@ -31,7 +31,7 @@ public class TaskExecutor implements ActionListener, HotKeyHandler {
         Frame parentFrame = getParentFrame(e);
         TaskInputDialog dialog = new TaskInputDialog(
                 parentFrame,
-                context.isSign(),
+                context.getNameId(),
                 context.isRefresh(),
                 context.getTimeout()
         );
@@ -52,7 +52,6 @@ public class TaskExecutor implements ActionListener, HotKeyHandler {
                 context.setMetadataURL(metadataURL);
             }
             context.setTimeout(dialog.getTimeout());
-            context.setSign(dialog.isSign());
             context.setRefresh(dialog.isRefresh());
 
             TaskType actionCommand = TaskType.fromString(e.getActionCommand());

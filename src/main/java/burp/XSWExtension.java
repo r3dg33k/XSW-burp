@@ -6,6 +6,7 @@ import burp.api.montoya.ui.hotkey.HotKeyContext;
 import burp.executors.TaskContext;
 import burp.executors.TaskExecutor;
 import burp.executors.TaskManager;
+import burp.utilities.helpers.Constants;
 import burp.utilities.helpers.MontoyaHelpers;
 import burp.utilities.helpers.Utilities;
 import burp.utilities.helpers.XMLHelpers;
@@ -41,6 +42,7 @@ public class XSWExtension implements BurpExtension {
             taskEngine.allowCoreThreadTimeOut(true);
 
             TaskContext context = new TaskContext();
+            context.setNameId(Constants.NAME_ID);
             TaskManager manager = new TaskManager(montoyaApi, taskEngine, context);
 
             montoyaApi.userInterface().registerHotKeyHandler(

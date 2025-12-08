@@ -232,18 +232,8 @@ public class WrapTask implements Runnable {
                     SAMLResponseBuilder builder = new SAMLResponseBuilder(authnRequest);
 
                     String nameId = Objects.requireNonNullElse(context.getNameId(),
-                            "administrator"
+                            Constants.NAME_ID
                     );
-                    byte[] certBytes = Base64.getDecoder().decode(metadataDocument.getX509Certificate());
-                    CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-                    X509Certificate x509certificate = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
-
-                    BurpCertificate originalCertificate = new BurpCertificate(x509certificate);
-                    originalCertificate.setPublicKey(x509certificate.getPublicKey());
-                    originalCertificate.setSource("SAML Metadata");
-
-                    BurpCertificate clonedCertificate = CertificateHelper.cloneCertificate(originalCertificate,
-                            new BurpCertificateBuilder(originalCertificate.getSubject()));
 
                     builder = builder.withIssuer(metadataDocument.getEntityID())
                             .withNameId(nameId)
@@ -251,48 +241,6 @@ public class WrapTask implements Runnable {
 
                     if (context.getAssertionConsumerServiceURL() != null && !context.getAssertionConsumerServiceURL().isBlank()) {
                         builder = builder.withDestination(context.getAssertionConsumerServiceURL());
-                    }
-
-                    if (context.isSign() && clonedCertificate != null) {
-                        try {
-                            Document signedMessageDoc = builder.build();
-                            Document signedAssertionDoc = builder.build();
-                            Document unsignedDoc = builder.build();
-
-                            xmlHelpers.signMessage(
-                                    signedMessageDoc,
-                                    XMLSignature.ALGO_ID_SIGNATURE_RSA_SHA256,
-                                    DigestMethod.SHA256,
-                                    clonedCertificate.getCertificate(),
-                                    clonedCertificate.getPrivateKey()
-                            );
-                            String crt = xmlHelpers.getCertificate(signedMessageDoc.getDocumentElement()).replaceAll("\r?\n", "");
-                            String fakeSignature = xmlHelpers.getStringWithoutNewLine(signedMessageDoc);
-                            String oracleSignature = fakeSignature.replace(crt, metadataDocument.getX509Certificate());
-
-                            xmlHelpers.signAssertion(
-                                    signedAssertionDoc,
-                                    XMLSignature.ALGO_ID_SIGNATURE_RSA_SHA256,
-                                    DigestMethod.SHA256,
-                                    clonedCertificate.getCertificate(),
-                                    clonedCertificate.getPrivateKey()
-                            );
-
-                            String crtA = xmlHelpers.getCertificate(signedAssertionDoc.getDocumentElement()).replaceAll("\r?\n", "");
-                            String fakeSignatureA = xmlHelpers.getStringWithoutNewLine(signedAssertionDoc);
-                            String oracleSignatureA = fakeSignatureA.replace(crtA, metadataDocument.getX509Certificate());
-
-                            wraps.add(ByteBuffer.wrap(fakeSignature.getBytes(StandardCharsets.UTF_8)));
-                            wraps.add(ByteBuffer.wrap(oracleSignature.getBytes(StandardCharsets.UTF_8)));
-
-                            wraps.add(ByteBuffer.wrap(fakeSignatureA.getBytes(StandardCharsets.UTF_8)));
-                            wraps.add(ByteBuffer.wrap(oracleSignatureA.getBytes(StandardCharsets.UTF_8)));
-
-                            wraps.add(ByteBuffer.wrap(xmlHelpers.getString(unsignedDoc).getBytes(StandardCharsets.UTF_8)));
-
-                        } catch (Exception e) {
-                            montoyaApi.logging().logToError(e.getLocalizedMessage());
-                        }
                     }
 
                     if (metadataDocument.isSigned()) {

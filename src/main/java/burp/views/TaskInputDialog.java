@@ -10,13 +10,12 @@ public class TaskInputDialog extends JDialog {
     private final JTextField assertionURLField = new JTextField(20);
     private final JTextField metadataURLField = new JTextField(20);
     private final JTextField timeoutField = new JTextField(20);
-    private final JCheckBox signCheckBox = new JCheckBox();
     private final JCheckBox refreshCheckBox = new JCheckBox();
     private boolean confirmed = false;
 
-    public TaskInputDialog(Frame parent, boolean defaultSign, boolean defaultRefresh, int defaultTimeout) {
+    public TaskInputDialog(Frame parent, String nameId, boolean defaultRefresh, int defaultTimeout) {
         super(parent, Utilities.getResourceString("dialog_menu_title"), true);
-        signCheckBox.setSelected(defaultSign);
+        nameIdField.setText(nameId);
         refreshCheckBox.setSelected(defaultRefresh);
         timeoutField.setText(String.valueOf(defaultTimeout));
         initComponents();
@@ -80,14 +79,6 @@ public class TaskInputDialog extends JDialog {
         row++;
         gbc.gridx = 0;
         gbc.gridy = row;
-        inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_self_sign")), gbc);
-
-        gbc.gridx = 1;
-        inputPanel.add(signCheckBox, gbc);
-
-        row++;
-        gbc.gridx = 0;
-        gbc.gridy = row;
         inputPanel.add(new JLabel(Utilities.getResourceString("dialog_menu_refresh")), gbc);
 
         gbc.gridx = 1;
@@ -141,10 +132,6 @@ public class TaskInputDialog extends JDialog {
         } catch (NumberFormatException e) {
             return 100;
         }
-    }
-
-    public boolean isSign() {
-        return signCheckBox.isSelected();
     }
 
     public boolean isRefresh() {

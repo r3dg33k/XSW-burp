@@ -6,6 +6,7 @@ import java.util.Random;
 import java.util.UUID;
 
 public class Constants {
+    public static final String NAME_ID = "administrator@gitlab.lab.local";
     public static final String XML = "http://www.w3.org/XML/1998/namespace";
     public static final String XMLNS = "http://www.w3.org/2000/xmlns/";
     public static final String SAML2P_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:protocol";

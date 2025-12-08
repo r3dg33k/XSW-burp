@@ -1,7 +1,8 @@
 package burp.executors;
 
+import burp.utilities.helpers.Constants;
+
 public class TaskContext {
-    private boolean sign;
     private boolean refresh;
     private int timeout;
     private String nameId;
@@ -51,20 +52,10 @@ public class TaskContext {
         this.refresh = refresh;
     }
 
-    public boolean isSign() {
-        return sign;
-    }
-
-    public void setSign(boolean sign) {
-        this.sign = sign;
-    }
-
-
     public void defaults() {
         this.refresh = false;
-        this.sign = true;
         this.timeout = 100;
-        this.nameId = "administrator";
+        this.nameId = Constants.NAME_ID;
         this.metadataURL = "";
     }
 }
