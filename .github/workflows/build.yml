@@ -17,12 +17,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Set up JDK 21 with Adoptium
+      # Set up JDK 21 with Adoptium (temurin)
       - name: Set up JDK 21
         uses: actions/setup-java@v2
         with:
           java-version: '21'
-          distribution: 'adoptopenjdk'  # Change this to 'temurin' for Adoptium
+          distribution: 'temurin'  # Use 'temurin' instead of 'adoptopenjdk'
 
       # Cache Gradle dependencies (optional but speeds up builds)
       - name: Cache Gradle dependencies
@@ -37,7 +37,7 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-      # Upload build artifact using the updated version (v4)
+      # Upload build artifact (optional)
       - name: Upload build artifact
         uses: actions/upload-artifact@v4  # Using the latest supported version
         with:
